@@ -1,0 +1,5 @@
+# Per-run scoring artifacts produced by the unit test / worker.
+metrics.json
+run-result-*.json
+__pycache__/
+*.pyc

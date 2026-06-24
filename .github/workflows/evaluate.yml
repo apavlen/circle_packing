@@ -1,0 +1,38 @@
+name: evaluate
+run-name: evaluate ${{ inputs.run_id }}
+
+# Self-scoring circle-packing evaluation. The candidate repo owns its own
+# correctness test; this workflow just runs the zero-Darwin worker, which runs
+# the test, reads the score it emits, and uploads a RunResult artifact that
+# Darwin's RestGithubActionsClient picks up.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Serialized Darwin EvaluationJob JSON
+        required: true
+      run_id:
+        description: Run id the coordinator is awaiting
+        required: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest  # GitHub-hosted runner; nothing to install.
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Run unit test and score
+        env:
+          DARWIN_JOB: ${{ inputs.job }}
+          DARWIN_RUN_ID: ${{ inputs.run_id }}
+          DARWIN_CANDIDATE_DIR: ${{ github.workspace }}
+          DARWIN_RESULT_PATH: ${{ github.workspace }}/run-result-${{ inputs.run_id }}.json
+        run: python3 score_runner.py
+
+      - name: Upload RunResult
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-result-${{ inputs.run_id }}
+          path: run-result-${{ inputs.run_id }}.json
+          if-no-files-found: error
