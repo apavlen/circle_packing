@@ -1,24 +1,15 @@
-"""Initial circle-packing program (the evolvable candidate).
-
-`solve()` returns a packing of circles in the unit square as
-``(centers, radii)``. This is the ONLY file an evolutionary loop should mutate;
-the correctness test (test_solution.py) is part of the fixed problem definition.
-"""
-
+"""Circle packing candidate: 3x3 grid (sum_radii = 1.5)."""
 import json
 
 
 def solve():
-    """Return ``(centers, radii)`` for a packing of circles in [0, 1]^2.
-
-    Initial program: four mutually-tangent circles, each inscribed in a quadrant
-    of the unit square (sum of radii = 1.0).
-    """
-    centers = [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]
-    radii = [0.25, 0.25, 0.25, 0.25]
+    k = 3
+    r = 1.0 / (2 * k)
+    centers = [[(i + 0.5) / k, (j + 0.5) / k] for i in range(k) for j in range(k)]
+    radii = [r] * (k * k)
     return centers, radii
 
 
 if __name__ == "__main__":
-    centers, radii = solve()
-    print(json.dumps({"centers": centers, "radii": radii, "sum_radii": sum(radii)}))
+    c, rr = solve()
+    print(json.dumps({"centers": c, "radii": rr, "sum_radii": sum(rr)}))
