@@ -1,89 +1,50 @@
-"""Correctness unit test for the circle packing in solve.py.
+"""Correctness unit test for the n=26 circle packing in solve.py.
 
 This test is the FIXED scorer for the problem. It does two jobs at once:
 
-1. Asserts correctness (every circle stays inside the unit square and no two
-   circles overlap) so a developer running ``python -m unittest`` sees a normal
-   pass/fail.
-2. Emits the objective as ``metrics.json`` (validity, sum_radii, combined_score)
-   so a Darwin worker can pick up the score without importing Darwin.
+1. Asserts correctness using the grader ported from Darwin's circle_packing
+   example (exactly 26 circles, in bounds, non-overlapping), so a developer
+   running ``python -m unittest`` sees a normal pass/fail.
+2. Emits the objective as ``metrics.json`` (validity, sum_radii, target_ratio,
+   combined_score) so a zero-Darwin worker can pick up the score.
 
-The score is the sum of radii, gated by validity: an invalid packing scores 0.
+combined_score = (sum_radii / TARGET_VALUE) * validity, matching
+examples/circle_packing/evaluator.py — so 1.0 is the AlphaEvolve target and an
+invalid packing scores 0.
 """
 
 import json
-import math
 import unittest
 from pathlib import Path
 
+import numpy as np
+
+from grader import N_CIRCLES, score, validate_packing
 from solve import solve
 
-# Geometry tolerances: a circle may touch a wall or another circle, but not
-# cross it. The tolerance absorbs floating-point noise without admitting real
-# overlaps.
-_BOUND_TOL = 1e-6
-_OVERLAP_TOL = 1e-6
-
 _METRICS_PATH = Path("metrics.json")
-
-
-def _out_of_bounds(centers, radii):
-    """Return the first circle index that escapes the unit square, else None."""
-    for i, ((x, y), r) in enumerate(zip(centers, radii)):
-        if r < 0:
-            return i
-        if (
-            x - r < -_BOUND_TOL
-            or x + r > 1 + _BOUND_TOL
-            or y - r < -_BOUND_TOL
-            or y + r > 1 + _BOUND_TOL
-        ):
-            return i
-    return None
-
-
-def _first_overlap(centers, radii):
-    """Return the first overlapping ``(i, j)`` pair, else None."""
-    n = len(centers)
-    for i in range(n):
-        for j in range(i + 1, n):
-            (xi, yi), (xj, yj) = centers[i], centers[j]
-            dist = math.hypot(xi - xj, yi - yj)
-            if dist < radii[i] + radii[j] - _OVERLAP_TOL:
-                return (i, j)
-    return None
 
 
 class TestCirclePacking(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.centers, cls.radii = solve()
-        bounds_bad = _out_of_bounds(cls.centers, cls.radii)
-        overlap_bad = _first_overlap(cls.centers, cls.radii)
-        valid = bounds_bad is None and overlap_bad is None and len(cls.centers) > 0
-        sum_radii = float(sum(cls.radii))
-        cls.metrics = {
-            "validity": 1.0 if valid else 0.0,
-            "sum_radii": sum_radii,
-            "combined_score": sum_radii if valid else 0.0,
-        }
+        centers, radii = solve()
+        cls.centers = np.asarray(centers, dtype=float)
+        cls.radii = np.asarray(radii, dtype=float)
+        cls.metrics = score(cls.centers, cls.radii)
         # Emit the score before any assertion fires so an invalid packing still
         # produces metrics.json (validity=0) rather than looking like a crash.
         _METRICS_PATH.write_text(json.dumps({"metrics": cls.metrics}), encoding="utf-8")
 
-    def test_has_circles(self):
-        self.assertGreater(len(self.centers), 0, "solve() returned no circles")
+    def test_exactly_26_circles(self):
+        self.assertEqual(self.centers.shape, (N_CIRCLES, 2), "must be exactly 26 centers")
+        self.assertEqual(self.radii.shape, (N_CIRCLES,), "must be exactly 26 radii")
 
-    def test_radii_match_centers(self):
-        self.assertEqual(len(self.centers), len(self.radii), "centers/radii length mismatch")
-
-    def test_all_circles_inside_unit_square(self):
-        bad = _out_of_bounds(self.centers, self.radii)
-        self.assertIsNone(bad, f"circle {bad} escapes the unit square")
-
-    def test_no_circles_overlap(self):
-        pair = _first_overlap(self.centers, self.radii)
-        self.assertIsNone(pair, f"circles {pair} overlap")
+    def test_packing_is_valid(self):
+        self.assertTrue(
+            validate_packing(self.centers, self.radii),
+            "packing is invalid: a circle is out of bounds or two circles overlap",
+        )
 
 
 if __name__ == "__main__":
